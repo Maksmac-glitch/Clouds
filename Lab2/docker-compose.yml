@@ -1,0 +1,47 @@
+# Хороший compose-файл: сервисы поднимаются вместе, но не находятся в одной сети
+services:
+  main:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lab2-good-main
+    ports:
+      - "8080:8000"
+    environment:
+      APP_NAME: "Clouds Main Service"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - main_net
+
+  storage:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lab2-good-storage
+    ports:
+      - "8081:8000"
+    environment:
+      APP_NAME: "Clouds Storage Service"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - storage_net
+
+networks:
+  main_net:
+    driver: bridge
+    internal: true
+  storage_net:
+    driver: bridge
+    internal: true

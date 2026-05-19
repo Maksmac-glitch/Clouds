@@ -1,0 +1,9 @@
+.git
+.gitignore
+README.md
+img
+screenshots
+*.log
+.env
+__pycache__
+*.pyc
