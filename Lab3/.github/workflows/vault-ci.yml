@@ -1,0 +1,79 @@
+# CI/CD со звёздочкой: пример получения секретов из внешнего secret storage.
+# В учебном примере используется dev-режим Vault как service container.
+# В production нельзя использовать root-token и dev-режим: нужно настраивать OIDC/JWT auth.
+name: Vault Based CI/CD Pipeline
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  VAULT_ADDR: http://127.0.0.1:8200
+
+jobs:
+  build-with-vault-secret:
+    runs-on: ubuntu-24.04
+
+    services:
+      vault:
+        image: hashicorp/vault:1.15
+        ports:
+          - 8200:8200
+        env:
+          VAULT_DEV_ROOT_TOKEN_ID: root
+          VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+        options: >-
+          --cap-add=IPC_LOCK
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install curl and jq for Vault API
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl jq
+
+      - name: Wait for Vault
+        run: |
+          for i in {1..30}; do
+            if curl -s "$VAULT_ADDR/v1/sys/health" > /dev/null; then
+              echo "Vault is available"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Vault did not start"
+          exit 1
+
+      - name: Put demo secret into Vault
+        run: |
+          curl --fail --silent --show-error \
+            --header "X-Vault-Token: root" \
+            --request POST \
+            --data '{"data":{"DEPLOY_API_TOKEN":"vault-demo-token-123","REGISTRY_PASSWORD":"vault-demo-registry-password"}}' \
+            "$VAULT_ADDR/v1/secret/data/clouds/prod"
+
+      - name: Read secret from Vault and mask it in logs
+        run: |
+          RESPONSE=$(curl --fail --silent \
+            --header "X-Vault-Token: root" \
+            "$VAULT_ADDR/v1/secret/data/clouds/prod")
+
+          DEPLOY_API_TOKEN=$(echo "$RESPONSE" | jq -r '.data.data.DEPLOY_API_TOKEN')
+          REGISTRY_PASSWORD=$(echo "$RESPONSE" | jq -r '.data.data.REGISTRY_PASSWORD')
+
+          echo "::add-mask::$DEPLOY_API_TOKEN"
+          echo "::add-mask::$REGISTRY_PASSWORD"
+
+          echo "DEPLOY_API_TOKEN=$DEPLOY_API_TOKEN" >> "$GITHUB_ENV"
+          echo "REGISTRY_PASSWORD=$REGISTRY_PASSWORD" >> "$GITHUB_ENV"
+
+      - name: Use secret without printing it
+        run: |
+          test -n "$DEPLOY_API_TOKEN"
+          test -n "$REGISTRY_PASSWORD"
+          echo "Secrets were received from Vault and can be used by the pipeline."

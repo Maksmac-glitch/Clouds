@@ -1,0 +1,51 @@
+# Плохой CI/CD-файл: намеренно содержит bad practices для лабораторной работы.
+name: Bad CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+
+env:
+  # BAD PRACTICE 1: секреты нельзя хранить в YAML-файле репозитория.
+  DEPLOY_TOKEN: "prod-token-123456"
+  REGISTRY_PASSWORD: "hardcoded-registry-password"
+  PROD_HOST: "192.168.10.15"
+
+jobs:
+  build-test-deploy:
+    # BAD PRACTICE 2: один job одновременно собирает, тестирует и деплоит.
+    runs-on: ubuntu-latest
+
+    steps:
+      # BAD PRACTICE 3: checkout заменён ручным git clone, токен попадает в команду.
+      - name: Clone repository manually
+        run: |
+          git clone https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} source
+          cd source
+
+      # BAD PRACTICE 4: установка неприкреплённых пакетов и лишних утилит.
+      - name: Install tools without pinning
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pip curl vim net-tools sshpass
+          pip install pytest requests flask
+
+      # BAD PRACTICE 5: тесты игнорируются, pipeline проходит даже при падении.
+      - name: Run tests but ignore failures
+        run: |
+          cd source
+          pytest || true
+
+      # BAD PRACTICE 6: используется тег latest, результат сборки не привязан к коммиту.
+      - name: Build latest image
+        run: |
+          cd source
+          docker build -t clouds-app:latest .
+
+      # BAD PRACTICE 7: имитация небезопасного деплоя по паролю root и без проверки host key.
+      - name: Deploy to production unsafely
+        run: |
+          echo "Deploying to $PROD_HOST with token $DEPLOY_TOKEN"
+          echo "sshpass -p 'root-password' ssh -o StrictHostKeyChecking=no root@$PROD_HOST 'docker run clouds-app:latest'"

@@ -1,0 +1,11 @@
+.git
+.github
+img
+vault
+tests
+README.md
+screenshot_guide.md
+__pycache__
+*.pyc
+.env
+*.log
